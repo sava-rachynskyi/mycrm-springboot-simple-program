@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CRM System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container my-4" style="max-width: 900px;">
+
+<h2 class="text-center mb-4">CRM System</h2>
+
+<div class="card p-3 mb-4 shadow-sm">
+    <h4 class="mb-3">1. Clients</h4>
+    <table class="table table-striped table-hover">
+        <thead>
+        <tr>
+            <th>Name (Click to open deals)</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody id="clientsTable"></tbody>
+    </table>
+
+    <h5 class="mt-4">Add New Client</h5>
+    <form id="clientForm" class="row g-2">
+        <div class="col-sm-3"><input type="text" id="firstName" class="form-control" placeholder="First Name" required></div>
+        <div class="col-sm-3"><input type="text" id="lastName" class="form-control" placeholder="Last Name" required></div>
+        <div class="col-sm-3"><input type="email" id="email" class="form-control" placeholder="Email" required></div>
+        <div class="col-sm-3"><input type="text" id="phone" class="form-control" placeholder="Phone" required></div>
+        <div class="col-12 text-end"><button type="submit" class="btn btn-primary mt-2">Save Client</button></div>
+    </form>
+</div>
+
+<div id="dealsSection" style="display: none;" class="card p-3 shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 id="dealsHeader">2. Deals</h4>
+        <div class="d-flex align-items-center gap-2">
+            <span>Sort by:</span>
+            <select id="sortSelect" class="form-select form-select-sm" style="width: 120px;" onchange="loadDeals()">
+                <option value="id">ID</option>
+                <option value="price">Price</option>
+                <option value="createdAt">Date</option>
+            </select>
+        </div>
+    </div>
+
+    <table class="table table-striped table-hover">
+        <thead>
+        <tr>
+            <th>Title</th>
+            <th>Price</th>
+            <th>Created At</th>
+            <th>End At</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody id="dealsTable"></tbody>
+    </table>
+
+    <h5 class="mt-4" id="dealFormTitle">Add New Deal</h5>
+    <form id="dealForm" class="row g-2">
+        <div class="col-sm-3"><input type="text" id="dealTitle" class="form-control" placeholder="Title" required></div>
+        <div class="col-sm-4"><input type="text" id="dealDesc" class="form-control" placeholder="Description" required></div>
+        <div class="col-sm-3"><input type="text" id="dealCat" class="form-control" placeholder="Category" required></div>
+        <div class="col-sm-2"><input type="number" step="0.01" id="dealPrice" class="form-control" placeholder="Price" required></div>
+        <div class="col-12 text-end"><button type="submit" class="btn btn-success mt-2">Save Deal</button></div>
+    </form>
+</div>
+
+<script>
+    let activeId = null;
+    let activeName = "";
+
+    async function loadClients() {
+        const res = await fetch('/data/clients');
+        const clients = await res.json();
+        const tbody = document.getElementById('clientsTable');
+        tbody.innerHTML = clients.map(c => `
+            <tr>
+                <td><a href="#" onclick="showDeals(${c.id}, '${c.firstName} ${c.lastName}')" class="text-primary fw-bold">${c.firstName} ${c.lastName}</a></td>
+                <td>${c.email}</td>
+                <td>${c.phone}</td>
+                <td>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="editClientEmail(${c.id}, '${c.email}')">Email</button>
+                    <button class="btn btn-outline-warning btn-sm" onclick="editClientPhone(${c.id}, '${c.phone}')">Phone</button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="deleteClient(${c.id})">Delete</button>
+                </td>
+            </tr>`).join('');
+    }
+
+    async function showDeals(id, name) {
+        activeId = id;
+        activeName = name;
+        document.getElementById('dealsHeader').innerText = `2. Deals for: ${name}`;
+        document.getElementById('dealFormTitle').innerText = `Add New Deal for ${name}`;
+        document.getElementById('dealsSection').style.display = 'block';
+        loadDeals();
+    }
+
+    async function loadDeals() {
+        const sort = document.getElementById('sortSelect').value;
+        const res = await fetch(`/data/deals?clientId=${activeId}&sort=${sort}`);
+        const deals = await res.json();
+        document.getElementById('dealsTable').innerHTML = deals.map(d => `
+            <tr>
+                <td>${d.title}</td>
+                <td class="fw-bold">${d.price} $</td>
+                <td>${d.createdAt}</td>
+                <td>${d.endDate ? d.endDate : '-'}</td>
+                <td><span class="badge ${d.status === 'COMPLETED' ? 'bg-success' : 'bg-secondary'}">${d.status}</span></td>
+                <td>
+                    ${d.status !== 'COMPLETED' ? `<button class="btn btn-success btn-sm me-1" onclick="completeDeal(${d.id}, ${d.price})">Complete</button>` : ''}
+                    <button class="btn btn-danger btn-sm" onclick="deleteDeal(${d.id})">Delete</button>
+                </td>
+            </tr>`).join('');
+    }
+
+    document.getElementById('clientForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const res = await fetch('/data/clients', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                email: document.getElementById('email').value,
+                phone: document.getElementById('phone').value
+            })
+        });
+        if (!res.ok) alert(await res.text());
+        else {
+            document.getElementById('clientForm').reset();
+            loadClients();
+        }
+    });
+
+    document.getElementById('dealForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const res = await fetch('/data/deals', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                title: document.getElementById('dealTitle').value,
+                description: document.getElementById('dealDesc').value,
+                category: document.getElementById('dealCat').value,
+                price: parseFloat(document.getElementById('dealPrice').value),
+                clientId: activeId
+            })
+        });
+        if (!res.ok) alert(await res.text());
+        else {
+            document.getElementById('dealForm').reset();
+            loadDeals();
+        }
+    });
+
+    async function editClientEmail(id, oldEmail) {
+        const newEmail = prompt("Enter new email:", oldEmail);
+        if (!newEmail || newEmail === oldEmail) return;
+
+        const res = await fetch(`/data/clients/${id}/email`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email: newEmail })
+        });
+        if (!res.ok) alert(await res.text());
+        else loadClients();
+    }
+
+    async function editClientPhone(id, oldPhone) {
+        const newPhone = prompt("Enter new phone number:", oldPhone);
+        if (!newPhone || newPhone === oldPhone) return;
+
+        const res = await fetch(`/data/clients/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ phone: newPhone })
+        });
+        if (!res.ok) alert(await res.text());
+        else loadClients();
+    }
+
+    async function completeDeal(id, currentPrice) {
+        if (!confirm("Are you sure you want to complete this deal? Price will be locked.")) return;
+
+        const res = await fetch(`/data/deals/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                price: currentPrice,
+                status: 'COMPLETED'
+            })
+        });
+        if (!res.ok) alert(await res.text());
+        else loadDeals();
+    }
+
+    async function deleteClient(id) {
+        const res = await fetch(`/data/clients/${id}`, { method: 'DELETE' });
+        if (!res.ok) alert(await res.text());
+        else {
+            if (id === activeId) document.getElementById('dealsSection').style.display = 'none';
+            loadClients();
+        }
+    }
+
+    async function deleteDeal(id) {
+        const res = await fetch(`/data/deals/${id}`, { method: 'DELETE' });
+        if (!res.ok) alert(await res.text());
+        else loadDeals();
+    }
+
+    window.onload = loadClients;
+</script>
+</body>
+</html>
